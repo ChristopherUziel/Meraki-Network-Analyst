@@ -1,18 +1,62 @@
 from fastapi import Depends, FastAPI, HTTPException, Path
 
 from app.meraki_client import MerakiAPIError, MerakiClient
-#importacion validacion de seguridad
+
+# importacion validacion de seguridad
 from app.security import require_bridge_api_key
+
+from contextlib import AsyncExitStack, asynccontextmanager
+from app.mcp_server import mcp
+
+# Proteger mcp
+import secrets
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from app.settings import get_settings
+
+# Configurar hostname permitido
+from mcp.server.transport_security import TransportSecuritySettings
+
+
+@asynccontextmanager
+async def lifespan(fastapi_app: FastAPI):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp.session_manager.run())
+        yield
 
 
 app = FastAPI(
     title="Meraki Copilot API",
     description=(
-        "API de solo lectura para conectar Microsoft 365 Copilot "
-        "con Cisco Meraki."
+        "API de solo lectura para conectar Microsoft 365 Copilot " "con Cisco Meraki."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
+
+
+class MCPApiKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/mcp"):
+            provided_key = request.headers.get("X-Bridge-API-Key")
+            expected_key = get_settings().bridge_api_key
+
+            if provided_key is None or not secrets.compare_digest(
+                provided_key,
+                expected_key,
+            ):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "detail": ("La clave de acceso del Bridge " "no es válida.")
+                    },
+                )
+
+        return await call_next(request)
+
+
+app.add_middleware(MCPApiKeyMiddleware)
 
 
 @app.get(
@@ -78,9 +122,7 @@ async def get_organization_device_status_overview(
     client = MerakiClient()
 
     try:
-        status_overview = await client.get_device_status_overview(
-            organization_id
-        )
+        status_overview = await client.get_device_status_overview(organization_id)
 
         return {
             "organizationId": organization_id,
@@ -92,3 +134,20 @@ async def get_organization_device_status_overview(
             status_code=error.status_code,
             detail=error.detail,
         ) from error
+
+
+mcp_transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=[
+        "127.0.0.1:8000",
+        "localhost:8000",
+        "tkfvsm4p-8000.usw3.devtunnels.ms",
+    ],
+)
+
+app.mount(
+    "/",
+    mcp.streamable_http_app(
+        transport_security=mcp_transport_security,
+    ),
+)
