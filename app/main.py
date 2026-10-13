@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import Depends, FastAPI, HTTPException, Path
 
 from app.meraki_client import MerakiAPIError, MerakiClient
+#importacion validacion de seguridad
+from app.security import require_bridge_api_key
 
 
 app = FastAPI(
@@ -30,6 +32,7 @@ async def get_health() -> dict[str, str]:
     "/organizations",
     operation_id="getOrganizations",
     summary="Obtiene las organizaciones disponibles en Meraki",
+    dependencies=[Depends(require_bridge_api_key)],
 )
 async def get_organizations() -> dict:
     client = MerakiClient()
@@ -64,6 +67,7 @@ async def get_organizations() -> dict:
     "/organizations/{organization_id}/device-status-overview",
     operation_id="getOrganizationDeviceStatusOverview",
     summary="Obtiene el resumen del estado de los dispositivos",
+    dependencies=[Depends(require_bridge_api_key)],
 )
 async def get_organization_device_status_overview(
     organization_id: str = Path(

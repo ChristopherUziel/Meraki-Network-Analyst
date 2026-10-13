@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     meraki_api_key: str
+    bridge_api_key: str
     meraki_base_url: str = "https://api.meraki.com/api/v1"
     app_env: str = "development"
 
