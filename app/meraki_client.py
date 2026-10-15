@@ -72,3 +72,64 @@ class MerakiClient:
         )
 
         return await self.get(path)
+
+
+    async def get_organization_networks(
+        self,
+        organization_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self.get(
+            f"/organizations/{organization_id}/networks",
+            params={
+                "perPage": 1000,
+            },
+        )
+
+    async def get_organization_devices(
+        self,
+        organization_id: str,
+        network_id: str | None = None,
+        product_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "perPage": 5000,
+        }
+
+        if network_id:
+            params["networkIds[]"] = network_id
+
+        if product_type:
+            params["productTypes[]"] = product_type
+
+        return await self.get(
+            f"/organizations/{organization_id}/devices",
+            params=params,
+        )
+
+    async def get_device_availabilities(
+        self,
+        organization_id: str,
+        network_id: str | None = None,
+        product_type: str | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "perPage": 1000,
+        }
+
+        if network_id:
+            params["networkIds[]"] = network_id
+
+        if product_type:
+            params["productTypes[]"] = product_type
+
+        if status:
+            params["statuses[]"] = status
+
+        return await self.get(
+            (
+                f"/organizations/{organization_id}"
+                "/devices/availabilities"
+            ),
+            params=params,
+        )
